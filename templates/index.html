@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance App</title>
+    <style>
+        :root {
+            --primary-bg: #ffffff;
+            --dark-bg: #000000;
+            --header-bg: #000000;
+            --accent-green: #2dfc06;
+            --accent-red: #ff0000;
+            --accent-grey: #4a4a4a;
+            --button-black: #000000;
+            --input-border: #000000;
+        }
+
+        * {
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        /* Mobile Container */
+        .app-container {
+            width: 375px;
+            height: 667px;
+            background: var(--primary-bg);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            border-radius: 20px;
+        }
+
+        /* Header */
+        header {
+            background: var(--header-bg);
+            color: white;
+            padding: 15px;
+            display: flex;
+            align-items: center;
+            height: 60px;
+            z-index: 100;
+            position: relative;
+        }
+
+        .menu-icon {
+            cursor: pointer;
+            margin-right: 20px;
+        }
+
+        .header-title {
+            font-size: 24px;
+            font-weight: 300;
+        }
+
+        /* Screens */
+        .screen {
+            display: none;
+            padding: 40px 20px;
+            height: calc(100% - 60px);
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .screen.active {
+            display: flex;
+        }
+
+        .screen.dark {
+            background-color: var(--dark-bg);
+            color: white;
+        }
+
+        /* Form Elements */
+        .input-group {
+            width: 100%;
+            margin-bottom: 25px;
+            position: relative;
+        }
+
+        input {
+            width: 100%;
+            padding: 15px 25px;
+            border: 1px solid var(--input-border);
+            border-radius: 50px;
+            font-size: 18px;
+            outline: none;
+        }
+
+        .dark input {
+            background: white;
+            color: black;
+        }
+
+        /* Buttons */
+        .btn {
+            width: 100%;
+            padding: 15px;
+            border-radius: 15px;
+            border: none;
+            color: white;
+            font-size: 22px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .btn:active { opacity: 0.7; }
+
+        .btn-green { background-color: var(--accent-green); color: black; }
+        .btn-red { background-color: var(--accent-red); }
+        .btn-grey { background-color: var(--accent-grey); }
+        .btn-black { background-color: var(--button-black); }
+
+        .nav-buttons {
+            display: flex;
+            gap: 15px;
+            width: 100%;
+            margin-top: auto;
+        }
+
+        /* Overlay Menu */
+        #menuOverlay {
+            position: absolute;
+            top: 60px;
+            left: 0;
+            width: 100%;
+            height: calc(100% - 60px);
+            background: black;
+            z-index: 99;
+            display: none;
+            padding: 40px;
+        }
+
+        #menuOverlay ul { list-style: none; }
+        #menuOverlay li {
+            color: white;
+            font-size: 28px;
+            margin-bottom: 30px;
+            cursor: pointer;
+        }
+
+        /* Note Box */
+        .note-box {
+            border: 1px solid white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 40px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        h2 { font-size: 40px; align-self: flex-start; margin-bottom: 40px; }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <header>
+        <div class="menu-icon" onclick="toggleMenu()">
+            <svg width="30" height="20" viewBox="0 0 30 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect width="30" height="4" fill="white"/>
+                <rect y="8" width="30" height="4" fill="white"/>
+                <rect y="16" width="30" height="4" fill="white"/>
+            </svg>
+        </div>
+        <div class="header-title">attendance</div>
+    </header>
+
+    <div id="menuOverlay">
+        <ul>
+            <li onclick="showScreen('screenDate')">Menu</li>
+            <li onclick="showScreen('screenEdit')">Edit</li>
+            <li onclick="showScreen('screenSubmit')">Submit</li>
+        </ul>
+    </div>
+
+    <div id="screenDate" class="screen active">
+        <div style="flex-grow: 1; display: flex; align-items: center; width: 100%;">
+            <div class="input-group">
+                <input type="text" id="dateInput" placeholder="Date: (e.g. 2026-03-02)">
+            </div>
+        </div>
+        <button class="btn btn-black" onclick="startAttendance()">Next</button>
+    </div>
+
+    <div id="screenEntry" class="screen">
+        <div class="input-group">
+            <input type="text" id="nameInput" placeholder="Name:" readonly>
+        </div>
+        <div class="input-group">
+            <input type="text" id="regInput" placeholder="Reg no:" readonly>
+        </div>
+        
+        <button class="btn btn-green" onclick="markAttendance('Present')">Present</button>
+        <button class="btn btn-red" onclick="markAttendance('Absent')">Absent</button>
+        <button class="btn btn-grey" onclick="markAttendance('OD')">OD</button>
+
+        <div class="nav-buttons">
+            <button class="btn btn-black" onclick="prevStudent()">Previous</button>
+            <button class="btn btn-black" onclick="nextStudent()">Next</button>
+        </div>
+    </div>
+
+    <div id="screenEdit" class="screen dark">
+        <h2>Edit</h2>
+        <div class="input-group">
+            <input type="text" id="editRegNo" placeholder="Enter reg no to edit">
+        </div>
+        <button class="btn btn-green" style="margin-top: 20px;" onclick="handleEdit()">Search & Edit</button>
+    </div>
+
+    <div id="screenSubmit" class="screen dark">
+        <h2>Submit</h2>
+        <div style="flex-grow: 1; display: flex; flex-direction: column; justify-content: center; width: 100%;">
+            <button class="btn btn-green" style="font-size: 32px; padding: 30px;" onclick="finalSubmit()">Submit!</button>
+            
+            <div class="note-box">
+                <strong>Note:</strong><br><br>
+                After submission the attendance will be sent to email
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let studentList = [];
+    let currentIndex = 0;
+    let attendanceData = {}; // Stores {reg_no: status}
+    let selectedDate = "";
+
+    function toggleMenu() {
+        const menu = document.getElementById('menuOverlay');
+        menu.style.display = (menu.style.display === 'block') ? 'none' : 'block';
+    }
+
+    function showScreen(screenId) {
+        document.getElementById('menuOverlay').style.display = 'none';
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(screenId).classList.add('active');
+    }
+
+    // Called when clicking "Next" on the Date screen
+    async function startAttendance() {
+        selectedDate = document.getElementById('dateInput').value;
+        if (!selectedDate) return alert("Please enter a date first!");
+
+        try {
+            const response = await fetch('/api/students');
+            studentList = await response.json();
+            
+            if (studentList.length > 0) {
+                currentIndex = 0;
+                showStudent();
+                showScreen('screenEntry');
+            } else {
+                alert("No students found in database.");
+            }
+        } catch (error) {
+            console.error("Error fetching students:", error);
+            alert("Database connection failed. Is the Python server running?");
+        }
+    }
+
+    // Displays the name/reg for the current index
+    function showStudent() {
+        if (studentList.length === 0) return;
+        const student = studentList[currentIndex];
+        document.getElementById('nameInput').value = student.name;
+        document.getElementById('regInput').value = student.register_no;
+    }
+
+    // Saves status and automatically shows the next student
+    function markAttendance(status) {
+        const student = studentList[currentIndex];
+        attendanceData[student.register_no] = status; // Store status by register number
+
+        if (currentIndex < studentList.length - 1) {
+            currentIndex++;
+            showStudent();
+        } else {
+            alert("All students marked! Moving to submit screen.");
+            showScreen('screenSubmit');
+        }
+    }
+
+    function nextStudent() {
+        if (currentIndex < studentList.length - 1) {
+            currentIndex++;
+            showStudent();
+        }
+    }
+
+    function prevStudent() {
+        if (currentIndex > 0) {
+            currentIndex--;
+            showStudent();
+        }
+    }
+
+    // Searches for a specific student to edit their status
+    function handleEdit() {
+        const reg = document.getElementById('editRegNo').value;
+        const index = studentList.findIndex(s => s.register_no === reg);
+        if (index !== -1) {
+            currentIndex = index;
+            showStudent();
+            showScreen('screenEntry');
+        } else {
+            alert("Student not found. Please check the Register No.");
+        }
+    }
+
+    // Sends the final data to the backend for the email report
+    async function finalSubmit() {
+        // Convert the attendanceData object into a list for the backend
+        const records = studentList.map(student => ({
+            name: student.name,
+            register_no: student.register_no,
+            gender: student.gender,
+            category: student.category,
+            status: attendanceData[student.register_no] || "Absent" // Default to absent if skipped
+        }));
+
+        try {
+            const response = await fetch('/api/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    date: selectedDate,
+                    records: records
+                })
+            });
+
+            if (response.ok) {
+                alert("Attendance submitted and Report sent to Email!");
+                location.reload(); 
+            } else {
+                alert("Submission failed. Check your server console.");
+            }
+        } catch (error) {
+            alert("Error sending data to server.");
+        }
+    }
+</script>
+
+</body>
+</html>
