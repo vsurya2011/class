@@ -119,7 +119,7 @@ OD Students:
 """
 
     try:
-        with smtplib.SMTP_SSL('smtp.gmail.com', 587) as server:
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
             server.login(SENDER_EMAIL, SENDER_PASSWORD)
             for receiver in RECEIVER_EMAILS:
                 msg = MIMEText(report)
@@ -134,4 +134,5 @@ OD Students:
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
+
 
