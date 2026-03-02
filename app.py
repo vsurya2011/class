@@ -1,32 +1,39 @@
 import os
-from flask import Flask, render_template, jsonify, request
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import csv
 import smtplib
+from flask import Flask, render_template, jsonify, request
 from email.mime.text import MIMEText
 
 app = Flask(__name__)
 
-# --- DATABASE CONFIGURATION ---
-# This automatically uses Render's database when deployed
-DATABASE_URL = os.environ.get('DATABASE_URL', "postgresql://postgres:1234@localhost/classdb")
+# --- CONFIGURATION ---
+# These pull from your Render "Environment Variables"
+SENDER_EMAIL = os.environ.get('EMAIL_USER', "vv708539@gmail.com")
+SENDER_PASSWORD = os.environ.get('EMAIL_PASS', "osjx pfrw sjtc cglf")
 
-# --- EMAIL CONFIGURATION ---
-SENDER_EMAIL = "vv708539@gmail.com"
-SENDER_PASSWORD = "osjx pfrw sjtc cglf"
-
-# Added three receiver mails as requested
 RECEIVER_EMAILS = [
     "krishnasurya2011@gmail.com",
-    "second_email@gmail.com", # Change these to your actual emails
-    "third_email@gmail.com"
+    "msulthan139@gmail.com", 
+    "third_email@example.com"
 ]
 
-def get_db_connection():
-    # If on Render, we need sslmode=require
-    if "render.com" in DATABASE_URL or "dpg-" in DATABASE_URL:
-        return psycopg2.connect(DATABASE_URL + "?sslmode=require")
-    return psycopg2.connect(DATABASE_URL)
+def load_students_from_csv():
+    students = []
+    try:
+        # This looks for students.csv in your main folder
+        file_path = os.path.join(os.path.dirname(__file__), 'students.csv')
+        with open(file_path, mode='r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                students.append({
+                    "name": row['name'],
+                    "register_no": row['register_no'],
+                    "gender": row['gender'],
+                    "category": row['category']
+                })
+    except Exception as e:
+        print(f"CSV Error: {e}")
+    return students
 
 @app.route('/')
 def index():
@@ -34,17 +41,10 @@ def index():
 
 @app.route('/api/students')
 def get_students():
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("SELECT name, register_no, gender, category FROM students ORDER BY id ASC")
-        students = cur.fetchall()
-        cur.close()
-        conn.close()
-        return jsonify(students)
-    except Exception as e:
-        print(f"Database Error: {e}")
-        return jsonify([]), 500
+    students = load_students_from_csv()
+    if not students:
+        return jsonify({"error": "No students found in CSV"}), 404
+    return jsonify(students)
 
 @app.route('/api/submit', methods=['POST'])
 def submit_attendance():
@@ -54,55 +54,68 @@ def submit_attendance():
 
     stats = {
         "total_p": 0, "total_a": 0,
-        "ds_boys_p": 0, "h_boys_p": 0, "ds_boys_a": 0, "h_boys_a": 0,
-        "ds_girls_p": 0, "h_girls_p": 0, "ds_girls_a": 0, "h_girls_a": 0,
-        "absent_list": [], "od_list": []
+        "ds_boys_a_count": 0, "ds_girls_a_count": 0,
+        "h_boys_a_count": 0, "h_girls_a_count": 0,
+        "ds_boys_list": [], "ds_girls_list": [],
+        "h_boys_list": [], "h_girls_list": [],
+        "od_list": []
     }
 
     for r in records:
         status = r['status']
-        gender = r.get('gender', 'male').lower()
-        cat = r.get('category', 'day_scholar').lower()
+        gender = str(r.get('gender', '')).lower()
+        cat = str(r.get('category', '')).lower()
+        info = f"{r['name']} ({r['register_no']})"
 
         if status == 'Present':
             stats["total_p"] += 1
-            if gender == 'male':
-                if cat == 'day_scholar': stats["ds_boys_p"] += 1
-                else: stats["h_boys_p"] += 1
-            else:
-                if cat == 'day_scholar': stats["ds_girls_p"] += 1
-                else: stats["h_girls_p"] += 1
         elif status == 'Absent':
             stats["total_a"] += 1
-            stats["absent_list"].append(f"{r['name']} ({r['register_no']})")
             if gender == 'male':
-                if cat == 'day_scholar': stats["ds_boys_a"] += 1
-                else: stats["h_boys_a"] += 1
+                if 'day' in cat:
+                    stats["ds_boys_a_count"] += 1
+                    stats["ds_boys_list"].append(info)
+                else:
+                    stats["h_boys_a_count"] += 1
+                    stats["h_boys_list"].append(info)
             else:
-                if cat == 'day_scholar': stats["ds_girls_a"] += 1
-                else: stats["h_girls_a"] += 1
+                if 'day' in cat:
+                    stats["ds_girls_a_count"] += 1
+                    stats["ds_girls_list"].append(info)
+                else:
+                    stats["h_girls_a_count"] += 1
+                    stats["h_girls_list"].append(info)
         elif status == 'OD':
-            stats["od_list"].append(f"{r['name']} ({r['register_no']})")
+            stats["od_list"].append(info)
 
     report = f"""
 DAILY ATTENDANCE REPORT - {date}
 
 Total Present: {stats['total_p']}
 Total Absent: {stats['total_a']}
-Total Dayscoler boys present: {stats['ds_boys_p']}
-Total hosteller boys present: {stats['h_boys_p']}
-Total Dayscoler boys absent: {stats['ds_boys_a']}
-Total hosteller boys absent: {stats['h_boys_a']}
-Total Dayscoler girls present: {stats['ds_girls_p']}
-Total hosteller girls present: {stats['h_girls_p']}
-Total Dayscoler girls absent: {stats['ds_girls_a']}
-Total hosteller girls absent: {stats['h_girls_a']}
+
+ABSENT SUMMARY:
+Total Dayscoler boys: {stats['ds_boys_a_count']}
+Total Dayscoler girls: {stats['ds_girls_a_count']}
+Total hosteller boys: {stats['h_boys_a_count']}
+Total hosteller girls: {stats['h_girls_a_count']}
+
+DETAILED ABSENT LIST:
+
+[Day Scholar Boys]
+{"\n".join(stats['ds_boys_list']) if stats['ds_boys_list'] else 'None'}
+
+[Day Scholar Girls]
+{"\n".join(stats['ds_girls_list']) if stats['ds_girls_list'] else 'None'}
+
+[Hosteller Boys]
+{"\n".join(stats['h_boys_list']) if stats['h_boys_list'] else 'None'}
+
+[Hosteller Girls]
+{"\n".join(stats['h_girls_list']) if stats['h_girls_list'] else 'None'}
 
 OD Students:
-{chr(10).join(stats['od_list']) if stats['od_list'] else 'None'}
-
-Absent Students Names:
-{chr(10).join(stats['absent_list']) if stats['absent_list'] else 'None'}
+{"\n".join(stats['od_list']) if stats['od_list'] else 'None'}
 """
 
     try:
@@ -116,7 +129,6 @@ Absent Students Names:
                 server.send_message(msg)
         return jsonify({"status": "success"})
     except Exception as e:
-        print(f"Email Error: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
