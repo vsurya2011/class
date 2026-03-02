@@ -4,12 +4,11 @@ services:
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    startCommand: gunicorn app:app --timeout 120
     envVars:
       - key: EMAIL_USER
         value: vv708539@gmail.com
       - key: EMAIL_PASS
         value: osjx pfrw sjtc cglf
-      # You can add the other receiver emails here as well if needed
-      - key: RECEIVER_EMAIL
-        value: krishnasurya2011@gmail.com
+      - key: RECEIVER_EMAILS_LIST
+        value: "krishnasurya2011@gmail.com,msulthan139@gmail.com,third_email@example.com"
