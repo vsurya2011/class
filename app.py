@@ -7,17 +7,25 @@ from email.mime.text import MIMEText
 
 app = Flask(__name__)
 
-# --- RENDER CONFIGURATION ---
-# Render provides a "Database URL" which we will paste into Environment Variables
-DATABASE_URL = os.environ.get('DATABASE_URL')
+# --- DATABASE CONFIGURATION ---
+# This automatically uses Render's database when deployed
+DATABASE_URL = os.environ.get('DATABASE_URL', "postgresql://postgres:1234@localhost/classdb")
 
-# These will be set in the Render Dashboard under "Environment"
-SENDER_EMAIL = os.environ.get('EMAIL_USER', 'vv708539@gmail.com')
-SENDER_PASSWORD = os.environ.get('EMAIL_PASS', 'osjx pfrw sjtc cglf')
-RECEIVER_EMAIL = os.environ.get('RECEIVER_EMAIL', 'krishnasurya2011@gmail.com')
+# --- EMAIL CONFIGURATION ---
+SENDER_EMAIL = "vv708539@gmail.com"
+SENDER_PASSWORD = "osjx pfrw sjtc cglf"
+
+# Added three receiver mails as requested
+RECEIVER_EMAILS = [
+    "krishnasurya2011@gmail.com",
+    "second_email@gmail.com", # Change these to your actual emails
+    "third_email@gmail.com"
+]
 
 def get_db_connection():
-    # Render requires SSL for external connections
+    # If on Render, we need sslmode=require
+    if "render.com" in DATABASE_URL or "dpg-" in DATABASE_URL:
+        return psycopg2.connect(DATABASE_URL + "?sslmode=require")
     return psycopg2.connect(DATABASE_URL)
 
 @app.route('/')
@@ -26,13 +34,17 @@ def index():
 
 @app.route('/api/students')
 def get_students():
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT name, register_no, gender, category FROM students ORDER BY id ASC")
-    students = cur.fetchall()
-    cur.close()
-    conn.close()
-    return jsonify(students)
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT name, register_no, gender, category FROM students ORDER BY id ASC")
+        students = cur.fetchall()
+        cur.close()
+        conn.close()
+        return jsonify(students)
+    except Exception as e:
+        print(f"Database Error: {e}")
+        return jsonify([]), 500
 
 @app.route('/api/submit', methods=['POST'])
 def submit_attendance():
@@ -60,7 +72,6 @@ def submit_attendance():
             else:
                 if cat == 'day_scholar': stats["ds_girls_p"] += 1
                 else: stats["h_girls_p"] += 1
-        
         elif status == 'Absent':
             stats["total_a"] += 1
             stats["absent_list"].append(f"{r['name']} ({r['register_no']})")
@@ -70,7 +81,6 @@ def submit_attendance():
             else:
                 if cat == 'day_scholar': stats["ds_girls_a"] += 1
                 else: stats["h_girls_a"] += 1
-        
         elif status == 'OD':
             stats["od_list"].append(f"{r['name']} ({r['register_no']})")
 
@@ -95,20 +105,20 @@ Absent Students Names:
 {chr(10).join(stats['absent_list']) if stats['absent_list'] else 'None'}
 """
 
-    msg = MIMEText(report)
-    msg['Subject'] = f"Attendance Report: {date}"
-    msg['From'] = SENDER_EMAIL
-    msg['To'] = RECEIVER_EMAIL
-
     try:
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
             server.login(SENDER_EMAIL, SENDER_PASSWORD)
-            server.send_message(msg)
+            for receiver in RECEIVER_EMAILS:
+                msg = MIMEText(report)
+                msg['Subject'] = f"Attendance Report: {date}"
+                msg['From'] = SENDER_EMAIL
+                msg['To'] = receiver
+                server.send_message(msg)
         return jsonify({"status": "success"})
     except Exception as e:
+        print(f"Email Error: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
-    # Render uses the PORT environment variable
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
