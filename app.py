@@ -7,17 +7,17 @@ from email.mime.text import MIMEText
 
 app = Flask(__name__)
 
-# --- RAILWAY CONFIGURATION ---
-# Railway provides DATABASE_URL. We use os.environ to get it securely.
+# --- RENDER CONFIGURATION ---
+# Render provides a "Database URL" which we will paste into Environment Variables
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
-# These will be set in the "Variables" tab on Railway
+# These will be set in the Render Dashboard under "Environment"
 SENDER_EMAIL = os.environ.get('EMAIL_USER', 'vv708539@gmail.com')
 SENDER_PASSWORD = os.environ.get('EMAIL_PASS', 'osjx pfrw sjtc cglf')
 RECEIVER_EMAIL = os.environ.get('RECEIVER_EMAIL', 'krishnasurya2011@gmail.com')
 
 def get_db_connection():
-    # Railway's DATABASE_URL is a complete connection string
+    # Render requires SSL for external connections
     return psycopg2.connect(DATABASE_URL)
 
 @app.route('/')
@@ -28,7 +28,6 @@ def index():
 def get_students():
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    # Fetching names in the exact order for automatic display
     cur.execute("SELECT name, register_no, gender, category FROM students ORDER BY id ASC")
     students = cur.fetchall()
     cur.close()
@@ -39,9 +38,8 @@ def get_students():
 def submit_attendance():
     data = request.json
     date = data['date']
-    records = data['records'] # List of students with marked status
+    records = data['records']
 
-    # Initialize counters for the report
     stats = {
         "total_p": 0, "total_a": 0,
         "ds_boys_p": 0, "h_boys_p": 0, "ds_boys_a": 0, "h_boys_a": 0,
@@ -51,8 +49,8 @@ def submit_attendance():
 
     for r in records:
         status = r['status']
-        gender = r['gender'].lower()
-        cat = r['category'].lower()
+        gender = r.get('gender', 'male').lower()
+        cat = r.get('category', 'day_scholar').lower()
 
         if status == 'Present':
             stats["total_p"] += 1
@@ -76,7 +74,6 @@ def submit_attendance():
         elif status == 'OD':
             stats["od_list"].append(f"{r['name']} ({r['register_no']})")
 
-    # Construct the exact report format you requested
     report = f"""
 DAILY ATTENDANCE REPORT - {date}
 
@@ -98,19 +95,20 @@ Absent Students Names:
 {chr(10).join(stats['absent_list']) if stats['absent_list'] else 'None'}
 """
 
-    # Send Email
     msg = MIMEText(report)
     msg['Subject'] = f"Attendance Report: {date}"
     msg['From'] = SENDER_EMAIL
     msg['To'] = RECEIVER_EMAIL
 
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-        server.login(SENDER_EMAIL, SENDER_PASSWORD)
-        server.send_message(msg)
-
-    return jsonify({"status": "success"})
+    try:
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(SENDER_EMAIL, SENDER_PASSWORD)
+            server.send_message(msg)
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
-    # On Railway, the PORT is assigned dynamically
+    # Render uses the PORT environment variable
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
