@@ -1,17 +1,16 @@
 import os
 import csv
-import smtplib
 from flask import Flask, render_template, jsonify, request
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 
 app = Flask(__name__)
 
-# --- CONFIGURATION (Render Environment Variables) ---
-# Set these in Render Dashboard -> Settings -> Environment Variables
-SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "vv708539@gmail.com")
-SENDER_PASSWORD = os.environ.get("SENDER_PASSWORD", "osjx pfrw sjtc cglf")
+# --- CONFIGURATION ---
+SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "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")
+SENDER_EMAIL = "vv708539@gmail.com"
 
+# The receiver emails
 RECEIVER_EMAILS = [
     "krishnasurya2011@gmail.com",
     "msulthan139@gmail.com", 
@@ -26,10 +25,10 @@ def load_students_from_csv():
             reader = csv.DictReader(f)
             for row in reader:
                 students.append({
-                    "name": row.get('name', '').strip(),
-                    "register_no": row.get('register_no', '').strip(),
-                    "gender": row.get('gender', '').strip().lower(),
-                    "category": row.get('category', '').strip().lower()
+                    "name": row['name'].strip(),
+                    "register_no": row['register_no'].strip(),
+                    "gender": row['gender'].strip(),
+                    "category": row['category'].strip()
                 })
     except Exception as e:
         print(f"CSV Error: {e}")
@@ -64,6 +63,7 @@ def submit_attendance():
 
         for r in records:
             status = r['status']
+            # Clean up the strings to avoid matching errors
             gender = str(r.get('gender', '')).lower().strip()
             cat = str(r.get('category', '')).lower().strip()
             info = f"{r['name']} ({r['register_no']})"
@@ -73,26 +73,26 @@ def submit_attendance():
             elif status == 'Absent':
                 stats["total_a"] += 1
                 
-                # --- FIXED LOGIC FOR GENDER ---
-                # We check for 'female' specifically so it doesn't match 'male'
-                if gender == 'female':
+                # FIXED LOGIC: Check 'female' first because 'male' is inside 'female'
+                if gender == 'female' or 'girl' in gender:
                     if 'day' in cat:
                         stats["ds_girls_a_count"] += 1
                         stats["ds_girls_list"].append(info)
                     else:
                         stats["h_girls_a_count"] += 1
                         stats["h_girls_list"].append(info)
-                else: # It's a male
+                else: # Covers 'male' or 'boy'
                     if 'day' in cat:
                         stats["ds_boys_a_count"] += 1
                         stats["ds_boys_list"].append(info)
                     else:
                         stats["h_boys_a_count"] += 1
                         stats["h_boys_list"].append(info)
+                        
             elif status == 'OD':
                 stats["od_list"].append(info)
 
-        # --- THE PLAIN TEXT FORMAT YOU REQUESTED ---
+        # --- YOUR EXACT REQUESTED FORMAT ---
         report = f"""
 DAILY ATTENDANCE REPORT - {date}
 
@@ -123,18 +123,18 @@ OD Students:
 {"\n".join(stats['od_list']) if stats['od_list'] else 'None'}
 """
 
-        # --- GMAIL SMTP LOGIC (Guaranteed Delivery) ---
-        msg = MIMEMultipart()
-        msg['From'] = SENDER_EMAIL
-        msg['To'] = ", ".join(RECEIVER_EMAILS)
-        msg['Subject'] = f"Attendance Report: {date}"
-        msg.attach(MIMEText(report, 'plain'))
+        # --- SENDGRID SENDING LOGIC ---
+        message = Mail(
+            from_email=SENDER_EMAIL,
+            to_emails=RECEIVER_EMAILS,
+            subject=f"Attendance Report: {date}",
+            plain_text_content=report
+        )
 
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-            server.login(SENDER_EMAIL, SENDER_PASSWORD)
-            server.send_message(msg)
-            
-        print("Email sent successfully via Gmail SMTP!")
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        response = sg.send(message)
+        
+        print(f"SendGrid Status Code: {response.status_code}")
         return jsonify({"status": "success"})
 
     except Exception as e:
